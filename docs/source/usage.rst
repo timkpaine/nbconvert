@@ -72,15 +72,15 @@ HTML
 
     If this option is provided, embed images as base64 urls in the resulting HTML file.
 
-.. _convert_webpdf:
+.. _convert_webhtml:
 
 WebHTML
-~~~~~~
+~~~~~~~
 * ``--to webhtml``
 
-  Generates an HTML document by first rendering to HTML, rendering the HTML Chromium headless, and
-  exporting to resulting HTML content back to a file. This exporter supports the same templates
-  as ``--to html``.
+  Generates an HTML document by first rendering the notebook to HTML, loading the HTML in headless
+  Chromium, and serializing the resulting DOM back to a file. This exporter supports the same
+  templates as ``--to html``.
 
   The webhtml exporter requires the ``playwright`` Chromium automation library, which
   can be installed via ``nbconvert[webhtml]``.
@@ -150,8 +150,8 @@ WebPDF
 ~~~~~~
 * ``--to webpdf``
 
-  Generates a PDF by first rendering to HTML, rendering the HTML Chromium headless, and
-  exporting to PDF. This exporter supports the same templates as ``--to html``.
+  Generates a PDF by first rendering the notebook to HTML, loading the HTML in headless Chromium,
+  and exporting to PDF. This exporter supports the same templates as ``--to html``.
 
   The webpdf exporter requires the ``playwright`` Chromium automation library, which
   can be installed via ``nbconvert[webpdf]``.

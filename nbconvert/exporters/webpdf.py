@@ -3,7 +3,7 @@
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-from traitlets import Bool, Int, default
+from traitlets import Bool, default
 
 from .webhtml import PLAYWRIGHT_INSTALLED, WebHTMLExporter  # noqa: F401
 
@@ -18,6 +18,8 @@ class WebPDFExporter(WebHTMLExporter):
     """
 
     export_from_notebook = "PDF via HTML"
+    _media_type = "print"
+    _output_format = "PDF"
 
     paginate = Bool(
         True,
@@ -27,15 +29,6 @@ class WebPDFExporter(WebHTMLExporter):
         If False, a PDF with one long page will be generated.
 
         Set to True to match behavior of LaTeX based PDF generator
-        """,
-    ).tag(config=True)
-
-    page_render_timeout = Int(
-        100,
-        help="""
-        Time to wait for the page to render before converting to PDF, in milliseconds.
-        Increase this value if your notebook has a lot of complex JavaScript
-        output that needs more time to load.
         """,
     ).tag(config=True)
 
@@ -55,7 +48,7 @@ class WebPDFExporter(WebHTMLExporter):
     def run_playwright(self, html, _postprocess=None):
         """Run playwright."""
 
-        async def _pdf_postprocess(page, browser, playwright):
+        async def _pdf_postprocess(page):
             """Post-process the PDF output."""
             pdf_params = {"print_background": True}
             if not self.paginate:
@@ -81,14 +74,4 @@ class WebPDFExporter(WebHTMLExporter):
                 )
             return await page.pdf(**pdf_params)
 
-        return super().run_playwright(html, _postprocess=_pdf_postprocess)
-
-    def from_notebook_node(self, nb, resources=None, **kw):
-        """Convert from a notebook node."""
-        html, resources = super().from_notebook_node(nb, resources=resources, **kw)
-
-        self.log.info("Building PDF")
-        pdf_data = self.run_playwright(html)
-        self.log.info("PDF successfully created")
-
-        return pdf_data, resources
+        return super().run_playwright(html, _postprocess=_postprocess or _pdf_postprocess)

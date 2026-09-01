@@ -166,7 +166,7 @@ nbconvert_flags.update(
                     "disable_sandbox": True,
                 },
             },
-            """Disable chromium security sandbox when converting to PDF..""",
+            """Disable chromium security sandbox for browser-based conversions.""",
         ),
         "show-input": (
             {

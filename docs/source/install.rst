@@ -87,7 +87,8 @@ Playwright makes use of a specific version of Chromium. If it does not find a su
 installation of the web browser, it can automatically download it if the ``--allow-chromium-download``
 flag is passed to the command line.
 
-To install a suitable version of playwright, you can pip install ``nbconvert[webpdf]``.
+Install Playwright with ``pip install nbconvert[webhtml]`` for HTML output or
+``pip install nbconvert[webpdf]`` for PDF output.
 
 PDF conversion on a limited TeX environment
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -11,12 +11,11 @@ import sys
 import tempfile
 from importlib import util as importlib_util
 
-from traitlets import Bool, List, Unicode, default
+from traitlets import Bool, Int, List, Unicode, default
 
 from .html import HTMLExporter
 
 PLAYWRIGHT_INSTALLED = importlib_util.find_spec("playwright") is not None
-IS_WINDOWS = os.name == "nt"
 
 __all__ = ("WebHTMLExporter",)
 
@@ -30,6 +29,8 @@ class WebHTMLExporter(HTMLExporter):
     """
 
     export_from_notebook = "HTML via Browser"
+    _media_type = "screen"
+    _output_format = "HTML"
 
     allow_chromium_download = Bool(
         False,
@@ -44,10 +45,19 @@ class WebHTMLExporter(HTMLExporter):
     def _template_name_default(self):
         return "webhtml"
 
+    page_render_timeout = Int(
+        100,
+        help="""
+        Time to wait for the page to render before serializing the output, in milliseconds.
+        Increase this value if your notebook has complex JavaScript output that needs
+        more time to load.
+        """,
+    ).tag(config=True)
+
     disable_sandbox = Bool(
         False,
         help="""
-        Disable chromium security sandbox when converting to PDF.
+        Disable chromium security sandbox during browser-based conversion.
 
         WARNING: This could cause arbitrary code execution in specific circumstances,
         where JS in your notebook can execute serverside code! Please use with
@@ -63,7 +73,7 @@ class WebHTMLExporter(HTMLExporter):
     browser_args = List(
         Unicode(),
         help="""
-        Additional arguments to pass to the browser rendering to PDF.
+        Additional arguments to pass to the browser.
 
         These arguments will be passed directly to the browser launch method
         and can be used to customize browser behavior beyond the default settings.
@@ -82,19 +92,15 @@ class WebHTMLExporter(HTMLExporter):
                 )
             except ModuleNotFoundError as e:
                 msg = (
-                    "Playwright is not installed to support Web PDF conversion. "
-                    "Please install `nbconvert[webpdf]` to enable."
+                    "Playwright is not installed to support browser-based conversion. "
+                    "Please install `nbconvert[webhtml]` or `nbconvert[webpdf]` to enable it."
                 )
                 raise RuntimeError(msg) from e
-
-            if self.allow_chromium_download:
-                cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
-                subprocess.check_call(cmd)  # noqa: S603
 
             playwright = await async_playwright().start()
             chromium = playwright.chromium
 
-            args = self.browser_args
+            args = list(self.browser_args)
             if self.disable_sandbox:
                 args.append("--no-sandbox")
 
@@ -111,23 +117,26 @@ class WebHTMLExporter(HTMLExporter):
                 await playwright.stop()
                 raise RuntimeError(msg) from e
 
-            page = await browser.new_page()
-            await page.emulate_media(media="print")
-            await page.wait_for_timeout(100)
-            await page.goto(f"file://{temp_file.name}", wait_until="networkidle")
-            await page.wait_for_timeout(100)
+            try:
+                page = await browser.new_page()
+                await page.emulate_media(media=self._media_type)
+                await page.wait_for_timeout(100)
+                await page.goto(f"file://{temp_file.name}", wait_until="networkidle")
+                await page.wait_for_timeout(self.page_render_timeout)
 
-            data = await page.content()
+                if _postprocess:
+                    return await _postprocess(page)
+                return await page.content()
+            finally:
+                try:
+                    await browser.close()
+                finally:
+                    await playwright.stop()
 
-            if _postprocess:
-                # Reuse this code for webpdf
-                data = await _postprocess(page, browser, playwright)
+        if self.allow_chromium_download:
+            cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+            subprocess.check_call(cmd)  # noqa: S603
 
-            await browser.close()
-            await playwright.stop()
-            return data
-
-        pool = concurrent.futures.ThreadPoolExecutor()
         # Create a temporary file to pass the HTML code to Chromium:
         # Unfortunately, tempfile on Windows does not allow for an already open
         # file to be opened by a separate process. So we must close it first
@@ -142,7 +151,8 @@ class WebHTMLExporter(HTMLExporter):
             else:
                 temp_file.write(html)
         try:
-            html_data = pool.submit(asyncio.run, main(temp_file)).result()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                html_data = pool.submit(asyncio.run, main(temp_file)).result()
         finally:
             # Ensure the file is deleted even if playwright raises an exception
             os.unlink(temp_file.name)
@@ -152,8 +162,8 @@ class WebHTMLExporter(HTMLExporter):
         """Convert from a notebook node."""
         html, resources = super().from_notebook_node(nb, resources=resources, **kw)
 
-        self.log.info("Building HTML")
+        self.log.info("Building %s", self._output_format)
         html_data = self.run_playwright(html)
-        self.log.info("HTML successfully created")
+        self.log.info("%s successfully created", self._output_format)
 
         return html_data, resources
